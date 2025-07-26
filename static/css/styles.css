@@ -1,20 +1,111 @@
 #canvasWrapper {
-  display: inline-block;
-  max-width: 100%;
-  border: 2px solid #ddd;
+    cursor: crosshair;
+    max-width: 100%;
+    display: inline-block; 
 }
+
 #imgCanvas {
-  cursor: crosshair;
-  display: block;
-  max-width: 100%;
+    max-width: 100%;
+    height: auto;
+    display: block;
 }
-.rect-item {
-  position: relative;
-  padding: .5rem;
+
+/* --- Estilos para o Modo Tela Cheia --- */
+
+/* Botão de confirmação fica escondido por padrão */
+#confirmFullscreenBtn {
+    display: none;
+    position: fixed;
+    bottom: 30px; /* Posicionado na parte inferior */
+    left: 50%;
+    transform: translateX(-50%); /* Centralizado horizontalmente */
+    z-index: 1002; /* Garante que fique acima de tudo */
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
 }
-.shape-toggle {
-  position: absolute;
-  top: .2rem;
-  right: .2rem;
-  cursor: pointer;
+
+/* Quando o body tiver a classe 'fullscreen-active' */
+body.fullscreen-active .container {
+    display: none; /* Esconde o container principal com todos os controles */
+}
+
+body.fullscreen-active #canvasWrapper {
+    /* Mostra o wrapper do canvas e o expande para a tela inteira */
+    display: flex !important; /* Usa !important para sobrescrever o d-none inicial */
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(20, 20, 20, 0.95); /* Fundo escuro mais opaco */
+    z-index: 1001;
+    border: none;
+    padding: 1rem;
+    box-sizing: border-box;
+    align-items: center;
+    justify-content: center;
+}
+
+body.fullscreen-active #imgCanvas {
+    /* Faz o canvas se ajustar à tela, mantendo a proporção */
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border: 1px solid #444;
+    box-shadow: 0 0 25px rgba(0,0,0,0.5);
+}
+
+body.fullscreen-active #confirmFullscreenBtn {
+    display: block; /* Mostra o botão de confirmação */
+}
+
+/* Estilos da Pré-visualização */
+#imagePreviewWrapper {
+    border: 1px solid #ddd;
+    background-color: #f8f9fa;
+    padding: 0.5rem;
+    max-height: 500px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#imagePreview {
+    max-width: 100%;
+    max-height: 480px;
+    object-fit: contain;
+}
+
+/* Estilos do Editor de Tela Cheia (Overlay) */
+#fullscreen-editor-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(20, 20, 20, 0.95);
+    z-index: 1050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    box-sizing: border-box;
+}
+
+#fullscreen-editor-overlay canvas {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border: 1px solid #444;
+    box-shadow: 0 0 25px rgba(0,0,0,0.5);
+    cursor: crosshair;
+}
+
+#fullscreen-editor-overlay .editor-button {
+    position: fixed;
+    bottom: 30px;
+    z-index: 1051;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
 }
