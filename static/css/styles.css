@@ -1,0 +1,20 @@
+#canvasWrapper {
+  display: inline-block;
+  max-width: 100%;
+  border: 2px solid #ddd;
+}
+#imgCanvas {
+  cursor: crosshair;
+  display: block;
+  max-width: 100%;
+}
+.rect-item {
+  position: relative;
+  padding: .5rem;
+}
+.shape-toggle {
+  position: absolute;
+  top: .2rem;
+  right: .2rem;
+  cursor: pointer;
+}
