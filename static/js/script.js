@@ -4,12 +4,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const previewSection = document.getElementById('previewSection');
     const imagePreview = document.getElementById('imagePreview');
     const openEditorBtn = document.getElementById('openEditorBtn');
+    const autoGridCheckbox = document.getElementById('autoGridCheckbox'); // Controle da grade
     const controls = document.getElementById('controls');
     const rectListDiv = document.getElementById('rectList');
     const downloadBtn = document.getElementById('downloadCrops');
 
     let originalImage = null;
-    const rects = []; // Array com as coordenadas dos recortes (nossa fonte da verdade)
+    const rects = [];
 
     // 1. Carregar a imagem
     imgInput.addEventListener('change', (e) => {
@@ -22,8 +23,8 @@ document.addEventListener('DOMContentLoaded', () => {
             originalImage.onload = () => {
                 imagePreview.src = originalImage.src;
                 previewSection.classList.remove('d-none');
-                controls.classList.add('d-none'); // Esconde controles antigos se carregar nova imagem
-                rects.length = 0; // Limpa recortes antigos
+                controls.classList.add('d-none');
+                rects.length = 0;
             };
             originalImage.src = event.target.result;
         };
@@ -56,7 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
         overlay.appendChild(canvas);
         overlay.appendChild(okButton);
         document.body.appendChild(overlay);
-        document.body.style.overflow = 'hidden'; // Impede scroll da página principal
+        document.body.style.overflow = 'hidden';
 
         // --- Lógica de desenho no canvas do editor ---
         let drawing = false;
@@ -74,15 +75,9 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(originalImage, 0, 0);
             rects.forEach(r => {
-                ctx.strokeStyle = r.shape === 'ellipse' ? '#0d6efd' : '#198754';
+                ctx.strokeStyle = '#198754'; // Verde para recortes confirmados
                 ctx.lineWidth = 2;
-                if (r.shape === 'ellipse') {
-                    ctx.beginPath();
-                    ctx.ellipse(r.x + r.w / 2, r.y + r.h / 2, r.w / 2, r.h / 2, 0, 0, 2 * Math.PI);
-                    ctx.stroke();
-                } else {
-                    ctx.strokeRect(r.x, r.y, r.w, r.h);
-                }
+                ctx.strokeRect(r.x, r.y, r.w, r.h);
             });
         };
 
@@ -97,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!drawing) return;
             const pos = getMousePos(e);
             redraw();
-            ctx.strokeStyle = 'red';
+            ctx.strokeStyle = 'red'; // Vermelho para o desenho atual
             ctx.lineWidth = 3;
             ctx.strokeRect(startX, startY, pos.x - startX, pos.y - startY);
         });
@@ -108,19 +103,40 @@ document.addEventListener('DOMContentLoaded', () => {
             const pos = getMousePos(e);
             const width = pos.x - startX;
             const height = pos.y - startY;
-            if (Math.abs(width) > 5 && Math.abs(height) > 5) {
-                rects.push({
-                    x: width > 0 ? startX : pos.x,
-                    y: height > 0 ? startY : pos.y,
-                    w: Math.abs(width),
-                    h: Math.abs(height),
-                    shape: e.shiftKey ? 'ellipse' : 'rect'
-                });
+
+            if (Math.abs(width) < 5 || Math.abs(height) < 5) {
+                redraw();
+                return;
+            }
+
+            const templateRect = {
+                x: width > 0 ? startX : pos.x,
+                y: height > 0 ? startY : pos.y,
+                w: Math.abs(width),
+                h: Math.abs(height),
+                shape: 'rect'
+            };
+
+            // --- LÓGICA DA GRADE AUTOMÁTICA ---
+            if (autoGridCheckbox.checked) {
+                rects.length = 0; // Limpa recortes anteriores
+                const templateW = templateRect.w;
+                const templateH = templateRect.h;
+
+                for (let y = 0; y + templateH <= originalImage.height; y += templateH) {
+                    for (let x = 0; x + templateW <= originalImage.width; x += templateW) {
+                        rects.push({ x: x, y: y, w: templateW, h: templateH, shape: 'rect' });
+                    }
+                }
+            } else {
+                // Comportamento antigo: apenas adiciona o retângulo desenhado
+                templateRect.shape = e.shiftKey ? 'ellipse' : 'rect';
+                rects.push(templateRect);
             }
             redraw();
         });
 
-        redraw(); // Desenho inicial
+        redraw();
 
         // --- Funções para fechar o editor ---
         const closeEditor = () => {
@@ -131,9 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         const handleEsc = (e) => {
-            if (e.key === 'Escape') {
-                closeEditor();
-            }
+            if (e.key === 'Escape') closeEditor();
         };
 
         okButton.addEventListener('click', closeEditor);
@@ -149,12 +163,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         controls.classList.remove('d-none');
-        rects.forEach((r, index) => {
-            const item = document.createElement('div');
-            item.className = 'list-group-item';
-            item.textContent = `Recorte #${index + 1} (${r.shape}) - W: ${Math.round(r.w)}, H: ${Math.round(r.h)}`;
-            rectListDiv.appendChild(item);
-        });
+        // Mostra um resumo se houver muitos recortes
+        if (rects.length > 10) {
+            const summaryItem = document.createElement('div');
+            summaryItem.className = 'list-group-item';
+            summaryItem.innerHTML = `<strong>${rects.length} recortes gerados.</strong><br><small>Clique em "Recortar e Baixar" para obter o arquivo ZIP.</small>`;
+            rectListDiv.appendChild(summaryItem);
+        } else {
+            rects.forEach((r, index) => {
+                const item = document.createElement('div');
+                item.className = 'list-group-item';
+                item.textContent = `Recorte #${index + 1} (${r.shape}) - W: ${Math.round(r.w)}, H: ${Math.round(r.h)}`;
+                rectListDiv.appendChild(item);
+            });
+        }
     }
 
     // 4. Lógica de Download
