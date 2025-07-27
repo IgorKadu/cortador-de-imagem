@@ -68,7 +68,6 @@ document.addEventListener('DOMContentLoaded', () => {
         let startX, startY;
         let tempRects = [];
         
-        // --- NOVO: Parâmetros da Grade e Alças de Ajuste ---
         let gridParams = null; // { x, y, w, h, xStep, yStep }
         let spacingHandles = {
             x: { x: 0, y: 0, size: 10, isDragging: false },
@@ -144,6 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         const isOverHandle = (pos) => {
+            if (!gridParams) return null;
             const { x, y, size } = spacingHandles.x;
             if (pos.x >= x && pos.x <= x + size && pos.y >= y && pos.y <= y + size) return 'x';
             const { x: yx, y: yy, size: ysize } = spacingHandles.y;
@@ -153,7 +153,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         canvas.addEventListener('mousedown', (e) => {
             const pos = getMousePos(e);
-            const handle = gridParams ? isOverHandle(pos) : null;
+            const handle = isOverHandle(pos);
 
             if (handle) {
                 editorState = 'DRAGGING_HANDLE';
@@ -175,11 +175,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (editorState === 'DRAGGING_HANDLE') {
                 if (spacingHandles.x.isDragging) {
                     const newStep = pos.x - gridParams.x + (spacingHandles.x.size / 2);
-                    gridParams.xStep = Math.max(gridParams.w, newStep);
+                    gridParams.xStep = Math.max(gridParams.w + 1, newStep);
                 }
                 if (spacingHandles.y.isDragging) {
                     const newStep = pos.y - gridParams.y + (spacingHandles.y.size / 2);
-                    gridParams.yStep = Math.max(gridParams.h, newStep);
+                    gridParams.yStep = Math.max(gridParams.h + 1, newStep);
                 }
                 redraw();
             } else if (editorState === 'ADJUSTING_GRID') {
@@ -195,7 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.strokeRect(startX, startY, pos.x - startX, pos.y - startY);
             }
             // Atualiza o cursor
-            const handle = gridParams ? isOverHandle(pos) : null;
+            const handle = isOverHandle(pos);
             if (handle === 'x') canvas.style.cursor = 'ew-resize';
             else if (handle === 'y') canvas.style.cursor = 'ns-resize';
             else if (gridParams || tempRects.length > 0) canvas.style.cursor = 'move';
@@ -232,12 +232,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const closeEditor = () => {
             finalRects.length = 0;
             if (gridParams) {
+                // A LÓGICA DE OURO: Robusta e Precisa
                 for (let y = gridParams.y; y < originalImage.height; y += gridParams.yStep) {
                     for (let x = gridParams.x; x < originalImage.width; x += gridParams.xStep) {
-                        const rectW = Math.min(gridParams.w, originalImage.width - x);
-                        const rectH = Math.min(gridParams.h, originalImage.height - y);
-                        if (rectW > 0 && rectH > 0 && x < originalImage.width && y < originalImage.height) {
-                            finalRects.push({ x, y, w: rectW, h: rectH, shape: 'rect' });
+                        // Condição de Intersecção: O retângulo da grade cruza com a área da imagem?
+                        const gridRectOverlapsImage = 
+                            x < originalImage.width &&
+                            x + gridParams.w > 0 &&
+                            y < originalImage.height &&
+                            y + gridParams.h > 0;
+
+                        if (gridRectOverlapsImage) {
+                            // Adiciona o retângulo com suas dimensões completas.
+                            // O backend fará o recorte final das bordas.
+                            finalRects.push({ x: x, y: y, w: gridParams.w, h: gridParams.h, shape: 'rect' });
                         }
                     }
                 }
