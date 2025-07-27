@@ -1,8 +1,4 @@
 flask
 opencv-python
 numpy<2.0
-<<<<<<< HEAD
 gunicorn
-=======
-gunicorn
->>>>>>> 87a19a08f939ac519e42849c8839d6aeecb3ac02
