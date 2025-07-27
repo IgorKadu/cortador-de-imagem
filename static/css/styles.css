@@ -88,6 +88,7 @@ body.fullscreen-active #confirmFullscreenBtn {
     background-color: rgba(20, 20, 20, 0.95);
     z-index: 1050;
     display: flex;
+    flex-direction: column; /* Organiza os itens verticalmente */
     align-items: center;
     justify-content: center;
     padding: 1rem;
@@ -95,17 +96,30 @@ body.fullscreen-active #confirmFullscreenBtn {
 }
 
 #fullscreen-editor-overlay canvas {
-    max-width: 100%;
-    max-height: 100%;
+    max-width: calc(100% - 2rem);
+    max-height: calc(100% - 8rem); /* Deixa espaço para os controles */
     object-fit: contain;
     border: 1px solid #444;
     box-shadow: 0 0 25px rgba(0,0,0,0.5);
     cursor: crosshair;
 }
 
-#fullscreen-editor-overlay .editor-button {
-    position: fixed;
-    bottom: 30px;
+/* NOVO: Controles dentro do editor */
+.editor-instructions {
+    color: #ccc;
+    font-style: italic;
+    padding: 0.5rem 0;
+    text-align: center;
+}
+
+.editor-controls {
+    position: absolute;
+    bottom: 20px;
+    display: flex;
+    gap: 1rem;
     z-index: 1051;
+}
+
+.editor-controls .btn {
     box-shadow: 0 4px 15px rgba(0,0,0,0.4);
 }

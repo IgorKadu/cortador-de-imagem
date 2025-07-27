@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Elementos da UI principal
+    // --- Elementos da UI ---
     const imgInput = document.getElementById('imgInput');
     const previewSection = document.getElementById('previewSection');
     const imagePreview = document.getElementById('imagePreview');
@@ -10,8 +10,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const downloadBtn = document.getElementById('downloadCrops');
 
     let originalImage = null;
-    const rects = [];
+    const finalRects = []; // A lista final de recortes para download
 
+    // --- Lógica Principal ---
     imgInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -22,7 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 imagePreview.src = originalImage.src;
                 previewSection.classList.remove('d-none');
                 controls.classList.add('d-none');
-                rects.length = 0;
+                finalRects.length = 0;
             };
             originalImage.src = event.target.result;
         };
@@ -34,28 +35,44 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function launchFullscreenEditor() {
+        // --- Criação do Editor ---
         const overlay = document.createElement('div');
         overlay.id = 'fullscreen-editor-overlay';
         const canvas = document.createElement('canvas');
         canvas.width = originalImage.width;
         canvas.height = originalImage.height;
         const ctx = canvas.getContext('2d');
+        
+        const instructions = document.createElement('p');
+        instructions.className = 'editor-instructions';
+        instructions.textContent = 'Desenhe um recorte. Use o mouse ou as setas do teclado para ajustar.';
+
+        const controlsContainer = document.createElement('div');
+        controlsContainer.className = 'editor-controls';
+        const clearButton = document.createElement('button');
+        clearButton.textContent = 'Limpar Seleção';
+        clearButton.className = 'btn btn-danger';
         const okButton = document.createElement('button');
         okButton.textContent = 'Confirmar Cortes';
-        okButton.className = 'btn btn-success btn-lg editor-button';
-        okButton.style.left = '50%';
-        okButton.style.transform = 'translateX(-50%)';
+        okButton.className = 'btn btn-success';
+        
+        controlsContainer.appendChild(clearButton);
+        controlsContainer.appendChild(okButton);
+        overlay.appendChild(instructions);
         overlay.appendChild(canvas);
-        overlay.appendChild(okButton);
+        overlay.appendChild(controlsContainer);
         document.body.appendChild(overlay);
         document.body.style.overflow = 'hidden';
 
+        // --- Estado do Editor ---
         let drawing = false;
         let isDragging = false;
-        let selectedRectIndex = null;
-        let dragOffsetX, dragOffsetY;
         let startX, startY;
+        let gridTemplate = null; // {x, y, w, h}
+        let gridOffset = { x: 0, y: 0 };
+        let tempRects = []; // Para recortes manuais
 
+        // --- Funções do Editor ---
         const getMousePos = (evt) => {
             const rect = canvas.getBoundingClientRect();
             return {
@@ -64,35 +81,53 @@ document.addEventListener('DOMContentLoaded', () => {
             };
         };
 
-        const getRectAtPos = (pos) => {
-            for (let i = rects.length - 1; i >= 0; i--) {
-                const r = rects[i];
-                if (pos.x >= r.x && pos.x <= r.x + r.w && pos.y >= r.y && pos.y <= r.y + r.h) {
-                    return i;
-                }
-            }
-            return null;
-        };
-
         const redraw = () => {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(originalImage, 0, 0);
-            rects.forEach((r, index) => {
-                ctx.strokeStyle = (isDragging && index === selectedRectIndex) ? '#ffc107' : '#198754';
-                ctx.lineWidth = (isDragging && index === selectedRectIndex) ? 3 : 2;
-                ctx.strokeRect(r.x, r.y, r.w, r.h);
-            });
+            ctx.strokeStyle = '#198754';
+            ctx.lineWidth = 2;
+
+            if (gridTemplate) {
+                const { w, h } = gridTemplate;
+                const startX = (gridTemplate.x % w) + gridOffset.x;
+                const startY = (gridTemplate.y % h) + gridOffset.y;
+                for (let y = startY - h; y < originalImage.height; y += h) {
+                    for (let x = startX - w; x < originalImage.width; x += w) {
+                        ctx.strokeRect(x, y, w, h);
+                    }
+                }
+            } else {
+                tempRects.forEach(r => ctx.strokeRect(r.x, r.y, r.w, r.h));
+            }
         };
 
+        const clearSelection = () => {
+            gridTemplate = null;
+            gridOffset = { x: 0, y: 0 };
+            tempRects = [];
+            redraw();
+        };
+
+        const moveSelection = (dx, dy) => {
+            if (gridTemplate) {
+                gridOffset.x += dx;
+                gridOffset.y += dy;
+            } else if (tempRects.length > 0) {
+                tempRects.forEach(r => {
+                    r.x += dx;
+                    r.y += dy;
+                });
+            }
+            redraw();
+        };
+
+        // --- Event Listeners do Editor ---
         canvas.addEventListener('mousedown', (e) => {
             const pos = getMousePos(e);
-            const rectIndex = getRectAtPos(pos);
-            if (rectIndex !== null && !autoGridCheckbox.checked) {
+            if (gridTemplate || tempRects.length > 0) {
                 isDragging = true;
-                selectedRectIndex = rectIndex;
-                const selectedRect = rects[selectedRectIndex];
-                dragOffsetX = pos.x - selectedRect.x;
-                dragOffsetY = pos.y - selectedRect.y;
+                startX = pos.x;
+                startY = pos.y;
                 canvas.style.cursor = 'grabbing';
             } else {
                 drawing = true;
@@ -104,26 +139,25 @@ document.addEventListener('DOMContentLoaded', () => {
         canvas.addEventListener('mousemove', (e) => {
             const pos = getMousePos(e);
             if (isDragging) {
-                const selectedRect = rects[selectedRectIndex];
-                selectedRect.x = pos.x - dragOffsetX;
-                selectedRect.y = pos.y - dragOffsetY;
-                redraw();
+                const dx = pos.x - startX;
+                const dy = pos.y - startY;
+                startX = pos.x;
+                startY = pos.y;
+                moveSelection(dx, dy);
             } else if (drawing) {
                 redraw();
                 ctx.strokeStyle = 'red';
                 ctx.lineWidth = 3;
                 ctx.strokeRect(startX, startY, pos.x - startX, pos.y - startY);
             } else {
-                canvas.style.cursor = (getRectAtPos(pos) !== null && !autoGridCheckbox.checked) ? 'move' : 'crosshair';
+                canvas.style.cursor = (gridTemplate || tempRects.length > 0) ? 'move' : 'crosshair';
             }
         });
 
         canvas.addEventListener('mouseup', (e) => {
-            canvas.style.cursor = 'crosshair';
+            canvas.style.cursor = 'move';
             if (isDragging) {
                 isDragging = false;
-                selectedRectIndex = null;
-                redraw();
             } else if (drawing) {
                 drawing = false;
                 const pos = getMousePos(e);
@@ -137,77 +171,77 @@ document.addEventListener('DOMContentLoaded', () => {
                     x: width > 0 ? startX : pos.x,
                     y: height > 0 ? startY : pos.y,
                     w: Math.abs(width),
-                    h: Math.abs(height),
-                    shape: 'rect'
+                    h: Math.abs(height)
                 };
-
                 if (autoGridCheckbox.checked) {
-                    rects.length = 0;
-                    const templateW = drawnRect.w;
-                    const templateH = drawnRect.h;
-                    const startX = drawnRect.x % templateW;
-                    const startY = drawnRect.y % templateH;
-                    for (let y = startY; y + templateH <= originalImage.height; y += templateH) {
-                        for (let x = startX; x + templateW <= originalImage.width; x += templateW) {
-                            rects.push({ x: x, y: y, w: templateW, h: templateH, shape: 'rect' });
-                        }
-                    }
+                    gridTemplate = drawnRect;
                 } else {
-                    rects.push(drawnRect);
+                    tempRects.push(drawnRect);
                 }
                 redraw();
             }
         });
 
-        canvas.addEventListener('mouseleave', () => {
-            canvas.style.cursor = 'default';
-        });
-
-        redraw();
+        const handleKeyDown = (e) => {
+            const step = e.shiftKey ? 10 : 1;
+            switch (e.key) {
+                case 'ArrowUp': moveSelection(0, -step); e.preventDefault(); break;
+                case 'ArrowDown': moveSelection(0, step); e.preventDefault(); break;
+                case 'ArrowLeft': moveSelection(-step, 0); e.preventDefault(); break;
+                case 'ArrowRight': moveSelection(step, 0); e.preventDefault(); break;
+                case 'Escape': closeEditor(); break;
+            }
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        clearButton.addEventListener('click', clearSelection);
 
         const closeEditor = () => {
+            // Confirmação: Transforma a seleção temporária em recortes finais
+            finalRects.length = 0;
+            if (gridTemplate) {
+                const { w, h } = gridTemplate;
+                const startX = (gridTemplate.x % w) + gridOffset.x;
+                const startY = (gridTemplate.y % h) + gridOffset.y;
+                for (let y = startY - h; y < originalImage.height; y += h) {
+                    for (let x = startX - w; x < originalImage.width; x += w) {
+                        finalRects.push({ x, y, w, h, shape: 'rect' });
+                    }
+                }
+            } else {
+                finalRects.push(...tempRects.map(r => ({ ...r, shape: 'rect' })));
+            }
+
             document.body.removeChild(overlay);
             document.body.style.overflow = 'auto';
-            document.removeEventListener('keydown', handleEsc);
+            document.removeEventListener('keydown', handleKeyDown);
             updateMainUI();
         };
-        const handleEsc = (e) => {
-            if (e.key === 'Escape') closeEditor();
-        };
         okButton.addEventListener('click', closeEditor);
-        document.addEventListener('keydown', handleEsc);
+        
+        redraw();
     }
 
     function updateMainUI() {
         rectListDiv.innerHTML = '';
-        if (rects.length === 0) {
+        if (finalRects.length === 0) {
             controls.classList.add('d-none');
             return;
         }
         controls.classList.remove('d-none');
-        if (rects.length > 10) {
-            const summaryItem = document.createElement('div');
-            summaryItem.className = 'list-group-item';
-            summaryItem.innerHTML = `<strong>${rects.length} recortes gerados.</strong><br><small>Clique em "Recortar e Baixar" para obter o arquivo ZIP.</small>`;
-            rectListDiv.appendChild(summaryItem);
-        } else {
-            rects.forEach((r, index) => {
-                const item = document.createElement('div');
-                item.className = 'list-group-item';
-                item.textContent = `Recorte #${index + 1} (${r.shape}) - W: ${Math.round(r.w)}, H: ${Math.round(r.h)}`;
-                rectListDiv.appendChild(item);
-            });
-        }
+        const summaryItem = document.createElement('div');
+        summaryItem.className = 'list-group-item';
+        summaryItem.innerHTML = `<strong>${finalRects.length} recortes prontos para download.</strong>`;
+        rectListDiv.appendChild(summaryItem);
     }
 
     downloadBtn.addEventListener('click', async () => {
-        if (!imgInput.files[0] || rects.length === 0) {
+        if (!imgInput.files[0] || finalRects.length === 0) {
             alert('Nenhum recorte selecionado para baixar.');
             return;
         }
         const formData = new FormData();
         formData.append('image', imgInput.files[0]);
-        formData.append('rects', JSON.stringify(rects));
+        formData.append('rects', JSON.stringify(finalRects));
         formData.append('format', document.getElementById('formatSelect').value);
         formData.append('quality', document.getElementById('qualityInput').value);
         downloadBtn.disabled = true;
