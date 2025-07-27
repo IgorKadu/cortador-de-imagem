@@ -84,6 +84,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const redraw = () => {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(originalImage, 0, 0);
+
+            // --- INÍCIO DA ALTERAÇÃO ---
+            // Salva o estado atual do canvas
+            ctx.save();
+            // Cria uma máscara de corte com o tamanho exato da imagem
+            ctx.beginPath();
+            ctx.rect(0, 0, originalImage.width, originalImage.height);
+            ctx.clip();
+            // --- FIM DA ALTERAÇÃO ---
+
             ctx.strokeStyle = '#198754';
             ctx.lineWidth = 2;
 
@@ -99,6 +109,9 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 tempRects.forEach(r => ctx.strokeRect(r.x, r.y, r.w, r.h));
             }
+
+            // Restaura o canvas ao estado original, removendo a máscara
+            ctx.restore();
         };
 
         const clearSelection = () => {
