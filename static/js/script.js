@@ -97,28 +97,34 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.drawImage(originalImage, 0, 0);
             
             if (gridParams) {
-                // --- INÍCIO DA CORREÇÃO ---
-                // Salva o estado do canvas (sem a máscara)
-                ctx.save();
-                // Cria a máscara de recorte com o tamanho exato da imagem
-                ctx.beginPath();
-                ctx.rect(0, 0, originalImage.width, originalImage.height);
-                ctx.clip();
-                // --- FIM DA CORREÇÃO ---
-
-                // Agora, desenha a grade. Qualquer parte que vaze será visualmente cortada pela máscara.
                 ctx.strokeStyle = '#198754'; // Verde
                 ctx.lineWidth = 2;
+
+                // --- INÍCIO DA LÓGICA DE DESENHO CORRIGIDA ---
+                // Itera sobre a grade teórica
                 for (let y = gridParams.y; y < originalImage.height; y += gridParams.yStep) {
                     for (let x = gridParams.x; x < originalImage.width; x += gridParams.xStep) {
-                        ctx.strokeRect(x, y, gridParams.w, gridParams.h);
+                        
+                        // Calcula a intersecção exata entre o retângulo da grade e os limites da imagem.
+                        const drawX = Math.max(x, 0);
+                        const drawY = Math.max(y, 0);
+                        const endX = Math.min(x + gridParams.w, originalImage.width);
+                        const endY = Math.min(y + gridParams.h, originalImage.height);
+
+                        // Calcula a largura e altura que são realmente visíveis.
+                        const drawW = endX - drawX;
+                        const drawH = endY - drawY;
+
+                        // Só desenha o retângulo se ele tiver uma área visível dentro da imagem.
+                        // Isso impede matematicamente que a grade "vaze" para fora.
+                        if (drawW > 0 && drawH > 0) {
+                            ctx.strokeRect(drawX, drawY, drawW, drawH);
+                        }
                     }
                 }
-                
-                // Restaura o canvas, removendo a máscara para desenhar as alças
-                ctx.restore();
+                // --- FIM DA LÓGICA DE DESENHO CORRIGIDA ---
 
-                // Desenha as alças DEPOIS de remover a máscara, para que sempre fiquem visíveis
+                // Desenha as alças de ajuste
                 const handleSize = spacingHandles.x.size;
                 spacingHandles.x.x = gridParams.x + gridParams.xStep - (handleSize / 2);
                 spacingHandles.x.y = gridParams.y + (gridParams.h / 2) - (handleSize / 2);
