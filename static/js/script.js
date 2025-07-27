@@ -63,36 +63,25 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.appendChild(overlay);
         document.body.style.overflow = 'hidden';
 
-        // --- NOVO: Máquina de estados para o modo de grade ---
-        let editorState = 'IDLE'; // IDLE, DRAWING, ADJUSTING
-        let gridState = 'DRAW_CROP'; // DRAW_CROP, DRAW_X_STEP, DRAW_Y_STEP, GRID_COMPLETE
-        
+        // --- Estado do Editor ---
+        let editorState = 'IDLE'; // IDLE, DRAWING, ADJUSTING_GRID, DRAGGING_HANDLE
         let startX, startY;
         let tempRects = [];
         
-        // Variáveis para a definição da grade
-        let cropBox = null;
-        let xStep = null;
-        let yStep = null;
+        // --- NOVO: Parâmetros da Grade e Alças de Ajuste ---
+        let gridParams = null; // { x, y, w, h, xStep, yStep }
+        let spacingHandles = {
+            x: { x: 0, y: 0, size: 10, isDragging: false },
+            y: { x: 0, y: 0, size: 10, isDragging: false }
+        };
 
         const updateInstructions = () => {
             if (autoGridCheckbox.checked) {
-                switch (gridState) {
-                    case 'DRAW_CROP':
-                        instructions.textContent = 'Passo 1: Desenhe um retângulo sobre o primeiro item.';
-                        break;
-                    case 'DRAW_X_STEP':
-                        instructions.textContent = 'Passo 2: Arraste do início do 1º item ao início do 2º item (horizontal).';
-                        break;
-                    case 'DRAW_Y_STEP':
-                        instructions.textContent = 'Passo 3: Arraste do início do 1º item ao início do item abaixo.';
-                        break;
-                    case 'GRID_COMPLETE':
-                        instructions.textContent = 'Grade completa! Clique em "Confirmar" ou "Limpar".';
-                        break;
-                }
+                instructions.textContent = gridParams ? 
+                    'Ajuste o espaçamento com as alças ou mova a grade com o mouse/setas.' : 
+                    'Desenhe um retângulo sobre o primeiro item para criar a grade.';
             } else {
-                instructions.textContent = 'Desenhe os recortes. Use o mouse para mover ou apague com "Limpar".';
+                instructions.textContent = 'Desenhe os recortes ou mova-os com o mouse.';
             }
         };
         
@@ -108,24 +97,28 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(originalImage, 0, 0);
             
-            // Desenha a grade final se estiver completa
-            if (gridState === 'GRID_COMPLETE') {
-                ctx.strokeStyle = '#198754';
+            if (gridParams) {
+                ctx.strokeStyle = '#198754'; // Verde
                 ctx.lineWidth = 2;
-                for (let y = cropBox.y; y < originalImage.height; y += yStep) {
-                    for (let x = cropBox.x; x < originalImage.width; x += xStep) {
-                        ctx.strokeRect(x, y, cropBox.w, cropBox.h);
+                for (let y = gridParams.y; y < originalImage.height; y += gridParams.yStep) {
+                    for (let x = gridParams.x; x < originalImage.width; x += gridParams.xStep) {
+                        if (x + gridParams.w > 0 && y + gridParams.h > 0 && x < originalImage.width && y < originalImage.height) {
+                            ctx.strokeRect(x, y, gridParams.w, gridParams.h);
+                        }
                     }
                 }
-            } else if (autoGridCheckbox.checked) {
-                // Desenha os elementos de ajuda para criar a grade
-                if (cropBox) {
-                    ctx.strokeStyle = '#198754';
-                    ctx.lineWidth = 2;
-                    ctx.strokeRect(cropBox.x, cropBox.y, cropBox.w, cropBox.h);
-                }
+                // Desenha as alças
+                const handleSize = spacingHandles.x.size;
+                spacingHandles.x.x = gridParams.x + gridParams.xStep - (handleSize / 2);
+                spacingHandles.x.y = gridParams.y + (gridParams.h / 2) - (handleSize / 2);
+                spacingHandles.y.x = gridParams.x + (gridParams.w / 2) - (handleSize / 2);
+                spacingHandles.y.y = gridParams.y + gridParams.yStep - (handleSize / 2);
+
+                ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
+                ctx.fillRect(spacingHandles.x.x, spacingHandles.x.y, handleSize, handleSize);
+                ctx.fillRect(spacingHandles.y.x, spacingHandles.y.y, handleSize, handleSize);
+
             } else {
-                // Desenha recortes manuais
                 ctx.strokeStyle = '#198754';
                 ctx.lineWidth = 2;
                 tempRects.forEach(r => ctx.strokeRect(r.x, r.y, r.w, r.h));
@@ -134,85 +127,116 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const reset = () => {
             editorState = 'IDLE';
-            gridState = 'DRAW_CROP';
-            cropBox = null;
-            xStep = null;
-            yStep = null;
+            gridParams = null;
             tempRects = [];
             updateInstructions();
             redraw();
         };
 
-        canvas.addEventListener('mousedown', (e) => {
-            editorState = 'DRAWING';
-            const pos = getMousePos(e);
-            startX = pos.x;
-            startY = pos.y;
-        });
-
-        canvas.addEventListener('mousemove', (e) => {
-            if (editorState !== 'DRAWING') return;
-            const pos = getMousePos(e);
-            redraw();
-            ctx.strokeStyle = 'red';
-            ctx.lineWidth = 3;
-            if (gridState === 'DRAW_X_STEP' || gridState === 'DRAW_Y_STEP') {
-                ctx.beginPath();
-                ctx.moveTo(startX, startY);
-                ctx.lineTo(pos.x, pos.y);
-                ctx.stroke();
+        const moveSelection = (dx, dy) => {
+            if (gridParams) {
+                gridParams.x += dx;
+                gridParams.y += dy;
             } else {
-                ctx.strokeRect(startX, startY, pos.x - startX, pos.y - startY);
+                tempRects.forEach(r => { r.x += dx; r.y += dy; });
+            }
+            redraw();
+        };
+
+        const isOverHandle = (pos) => {
+            const { x, y, size } = spacingHandles.x;
+            if (pos.x >= x && pos.x <= x + size && pos.y >= y && pos.y <= y + size) return 'x';
+            const { x: yx, y: yy, size: ysize } = spacingHandles.y;
+            if (pos.x >= yx && pos.x <= yx + ysize && pos.y >= yy && pos.y <= yy + ysize) return 'y';
+            return null;
+        };
+
+        canvas.addEventListener('mousedown', (e) => {
+            const pos = getMousePos(e);
+            const handle = gridParams ? isOverHandle(pos) : null;
+
+            if (handle) {
+                editorState = 'DRAGGING_HANDLE';
+                if (handle === 'x') spacingHandles.x.isDragging = true;
+                if (handle === 'y') spacingHandles.y.isDragging = true;
+            } else if (gridParams || tempRects.length > 0) {
+                editorState = 'ADJUSTING_GRID';
+                startX = pos.x;
+                startY = pos.y;
+            } else {
+                editorState = 'DRAWING';
+                startX = pos.x;
+                startY = pos.y;
             }
         });
 
-        canvas.addEventListener('mouseup', (e) => {
-            if (editorState !== 'DRAWING') return;
-            editorState = 'IDLE';
+        canvas.addEventListener('mousemove', (e) => {
             const pos = getMousePos(e);
-            const width = pos.x - startX;
-            const height = pos.y - startY;
-
-            if (autoGridCheckbox.checked) {
-                if (gridState === 'DRAW_CROP') {
-                    if (Math.abs(width) < 5 || Math.abs(height) < 5) { redraw(); return; }
-                    cropBox = {
-                        x: width > 0 ? startX : pos.x,
-                        y: height > 0 ? startY : pos.y,
-                        w: Math.abs(width),
-                        h: Math.abs(height)
-                    };
-                    gridState = 'DRAW_X_STEP';
-                } else if (gridState === 'DRAW_X_STEP') {
-                    xStep = Math.abs(width);
-                    if (xStep < 1) { redraw(); return; }
-                    gridState = 'DRAW_Y_STEP';
-                } else if (gridState === 'DRAW_Y_STEP') {
-                    yStep = Math.abs(height);
-                    if (yStep < 1) { redraw(); return; }
-                    gridState = 'GRID_COMPLETE';
+            if (editorState === 'DRAGGING_HANDLE') {
+                if (spacingHandles.x.isDragging) {
+                    const newStep = pos.x - gridParams.x + (spacingHandles.x.size / 2);
+                    gridParams.xStep = Math.max(gridParams.w, newStep);
                 }
-            } else {
-                if (Math.abs(width) < 5 || Math.abs(height) < 5) { redraw(); return; }
-                tempRects.push({
+                if (spacingHandles.y.isDragging) {
+                    const newStep = pos.y - gridParams.y + (spacingHandles.y.size / 2);
+                    gridParams.yStep = Math.max(gridParams.h, newStep);
+                }
+                redraw();
+            } else if (editorState === 'ADJUSTING_GRID') {
+                const dx = pos.x - startX;
+                const dy = pos.y - startY;
+                startX = pos.x;
+                startY = pos.y;
+                moveSelection(dx, dy);
+            } else if (editorState === 'DRAWING') {
+                redraw();
+                ctx.strokeStyle = 'red';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(startX, startY, pos.x - startX, pos.y - startY);
+            }
+            // Atualiza o cursor
+            const handle = gridParams ? isOverHandle(pos) : null;
+            if (handle === 'x') canvas.style.cursor = 'ew-resize';
+            else if (handle === 'y') canvas.style.cursor = 'ns-resize';
+            else if (gridParams || tempRects.length > 0) canvas.style.cursor = 'move';
+            else canvas.style.cursor = 'crosshair';
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (editorState === 'DRAWING') {
+                const pos = getMousePos(e);
+                const width = pos.x - startX;
+                const height = pos.y - startY;
+                if (Math.abs(width) < 5 || Math.abs(height) < 5) { reset(); return; }
+                
+                const rect = {
                     x: width > 0 ? startX : pos.x,
                     y: height > 0 ? startY : pos.y,
                     w: Math.abs(width),
                     h: Math.abs(height)
-                });
+                };
+
+                if (autoGridCheckbox.checked) {
+                    gridParams = { ...rect, xStep: rect.w + 10, yStep: rect.h + 10 };
+                } else {
+                    tempRects.push(rect);
+                }
             }
+            editorState = 'IDLE';
+            spacingHandles.x.isDragging = false;
+            spacingHandles.y.isDragging = false;
             updateInstructions();
             redraw();
         });
 
         const closeEditor = () => {
             finalRects.length = 0;
-            if (autoGridCheckbox.checked && gridState === 'GRID_COMPLETE') {
-                for (let y = cropBox.y; y < originalImage.height; y += yStep) {
-                    for (let x = cropBox.x; x < originalImage.width; x += xStep) {
-                        const rectW = Math.min(cropBox.w, originalImage.width - x);
-                        const rectH = Math.min(cropBox.h, originalImage.height - y);
-                        if (rectW > 0 && rectH > 0) {
+            if (gridParams) {
+                for (let y = gridParams.y; y < originalImage.height; y += gridParams.yStep) {
+                    for (let x = gridParams.x; x < originalImage.width; x += gridParams.xStep) {
+                        const rectW = Math.min(gridParams.w, originalImage.width - x);
+                        const rectH = Math.min(gridParams.h, originalImage.height - y);
+                        if (rectW > 0 && rectH > 0 && x < originalImage.width && y < originalImage.height) {
                             finalRects.push({ x, y, w: rectW, h: rectH, shape: 'rect' });
                         }
                     }
@@ -226,7 +250,16 @@ document.addEventListener('DOMContentLoaded', () => {
             updateMainUI();
         };
 
-        const handleKeyDown = (e) => { if (e.key === 'Escape') closeEditor(); };
+        const handleKeyDown = (e) => {
+            const step = e.shiftKey ? 10 : 1;
+            switch (e.key) {
+                case 'ArrowUp': moveSelection(0, -step); e.preventDefault(); break;
+                case 'ArrowDown': moveSelection(0, step); e.preventDefault(); break;
+                case 'ArrowLeft': moveSelection(-step, 0); e.preventDefault(); break;
+                case 'ArrowRight': moveSelection(step, 0); e.preventDefault(); break;
+                case 'Escape': closeEditor(); break;
+            }
+        };
         document.addEventListener('keydown', handleKeyDown);
         clearButton.addEventListener('click', reset);
         okButton.addEventListener('click', closeEditor);
