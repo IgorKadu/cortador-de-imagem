@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const downloadBtn = document.getElementById('downloadCrops');
 
     let originalImage = null;
-    const finalRects = []; // A lista final de recortes para download
+    const finalRects = [];
 
     // --- Lógica Principal ---
     imgInput.addEventListener('change', (e) => {
@@ -45,12 +45,11 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const instructions = document.createElement('p');
         instructions.className = 'editor-instructions';
-        instructions.textContent = 'Desenhe um recorte. Use o mouse ou as setas do teclado para ajustar.';
 
         const controlsContainer = document.createElement('div');
         controlsContainer.className = 'editor-controls';
         const clearButton = document.createElement('button');
-        clearButton.textContent = 'Limpar Seleção';
+        clearButton.textContent = 'Limpar / Reiniciar';
         clearButton.className = 'btn btn-danger';
         const okButton = document.createElement('button');
         okButton.textContent = 'Confirmar Cortes';
@@ -64,15 +63,39 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.appendChild(overlay);
         document.body.style.overflow = 'hidden';
 
-        // --- Estado do Editor ---
-        let drawing = false;
-        let isDragging = false;
+        // --- NOVO: Máquina de estados para o modo de grade ---
+        let editorState = 'IDLE'; // IDLE, DRAWING, ADJUSTING
+        let gridState = 'DRAW_CROP'; // DRAW_CROP, DRAW_X_STEP, DRAW_Y_STEP, GRID_COMPLETE
+        
         let startX, startY;
-        let gridTemplate = null; // {x, y, w, h}
-        let gridOffset = { x: 0, y: 0 };
-        let tempRects = []; // Para recortes manuais
+        let tempRects = [];
+        
+        // Variáveis para a definição da grade
+        let cropBox = null;
+        let xStep = null;
+        let yStep = null;
 
-        // --- Funções do Editor ---
+        const updateInstructions = () => {
+            if (autoGridCheckbox.checked) {
+                switch (gridState) {
+                    case 'DRAW_CROP':
+                        instructions.textContent = 'Passo 1: Desenhe um retângulo sobre o primeiro item.';
+                        break;
+                    case 'DRAW_X_STEP':
+                        instructions.textContent = 'Passo 2: Arraste do início do 1º item ao início do 2º item (horizontal).';
+                        break;
+                    case 'DRAW_Y_STEP':
+                        instructions.textContent = 'Passo 3: Arraste do início do 1º item ao início do item abaixo.';
+                        break;
+                    case 'GRID_COMPLETE':
+                        instructions.textContent = 'Grade completa! Clique em "Confirmar" ou "Limpar".';
+                        break;
+                }
+            } else {
+                instructions.textContent = 'Desenhe os recortes. Use o mouse para mover ou apague com "Limpar".';
+            }
+        };
+        
         const getMousePos = (evt) => {
             const rect = canvas.getBoundingClientRect();
             return {
@@ -84,184 +107,131 @@ document.addEventListener('DOMContentLoaded', () => {
         const redraw = () => {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(originalImage, 0, 0);
-
-            // --- INÍCIO DA ALTERAÇÃO ---
-            // Salva o estado atual do canvas
-            ctx.save();
-            // Cria uma máscara de corte com o tamanho exato da imagem
-            ctx.beginPath();
-            ctx.rect(0, 0, originalImage.width, originalImage.height);
-            ctx.clip();
-            // --- FIM DA ALTERAÇÃO ---
-
-            ctx.strokeStyle = '#198754';
-            ctx.lineWidth = 2;
-
-            if (gridTemplate) {
-                const { w, h } = gridTemplate;
-                const startX = (gridTemplate.x % w) + gridOffset.x;
-                const startY = (gridTemplate.y % h) + gridOffset.y;
-                for (let y = startY - h; y < originalImage.height; y += h) {
-                    for (let x = startX - w; x < originalImage.width; x += w) {
-                        ctx.strokeRect(x, y, w, h);
+            
+            // Desenha a grade final se estiver completa
+            if (gridState === 'GRID_COMPLETE') {
+                ctx.strokeStyle = '#198754';
+                ctx.lineWidth = 2;
+                for (let y = cropBox.y; y < originalImage.height; y += yStep) {
+                    for (let x = cropBox.x; x < originalImage.width; x += xStep) {
+                        ctx.strokeRect(x, y, cropBox.w, cropBox.h);
                     }
                 }
+            } else if (autoGridCheckbox.checked) {
+                // Desenha os elementos de ajuda para criar a grade
+                if (cropBox) {
+                    ctx.strokeStyle = '#198754';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(cropBox.x, cropBox.y, cropBox.w, cropBox.h);
+                }
             } else {
+                // Desenha recortes manuais
+                ctx.strokeStyle = '#198754';
+                ctx.lineWidth = 2;
                 tempRects.forEach(r => ctx.strokeRect(r.x, r.y, r.w, r.h));
             }
-
-            // Restaura o canvas ao estado original, removendo a máscara
-            ctx.restore();
         };
 
-        const clearSelection = () => {
-            gridTemplate = null;
-            gridOffset = { x: 0, y: 0 };
+        const reset = () => {
+            editorState = 'IDLE';
+            gridState = 'DRAW_CROP';
+            cropBox = null;
+            xStep = null;
+            yStep = null;
             tempRects = [];
+            updateInstructions();
             redraw();
         };
 
-        const moveSelection = (dx, dy) => {
-            if (gridTemplate) {
-                gridOffset.x += dx;
-                gridOffset.y += dy;
-            } else if (tempRects.length > 0) {
-                tempRects.forEach(r => {
-                    r.x += dx;
-                    r.y += dy;
-                });
-            }
-            redraw();
-        };
-
-        // --- Event Listeners do Editor ---
         canvas.addEventListener('mousedown', (e) => {
+            editorState = 'DRAWING';
             const pos = getMousePos(e);
-            if (gridTemplate || tempRects.length > 0) {
-                isDragging = true;
-                startX = pos.x;
-                startY = pos.y;
-                canvas.style.cursor = 'grabbing';
-            } else {
-                drawing = true;
-                startX = pos.x;
-                startY = pos.y;
-            }
+            startX = pos.x;
+            startY = pos.y;
         });
 
         canvas.addEventListener('mousemove', (e) => {
+            if (editorState !== 'DRAWING') return;
             const pos = getMousePos(e);
-            if (isDragging) {
-                const dx = pos.x - startX;
-                const dy = pos.y - startY;
-                startX = pos.x;
-                startY = pos.y;
-                moveSelection(dx, dy);
-            } else if (drawing) {
-                redraw();
-                ctx.strokeStyle = 'red';
-                ctx.lineWidth = 3;
-                ctx.strokeRect(startX, startY, pos.x - startX, pos.y - startY);
+            redraw();
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 3;
+            if (gridState === 'DRAW_X_STEP' || gridState === 'DRAW_Y_STEP') {
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(pos.x, pos.y);
+                ctx.stroke();
             } else {
-                canvas.style.cursor = (gridTemplate || tempRects.length > 0) ? 'move' : 'crosshair';
+                ctx.strokeRect(startX, startY, pos.x - startX, pos.y - startY);
             }
         });
 
         canvas.addEventListener('mouseup', (e) => {
-            canvas.style.cursor = 'move';
-            if (isDragging) {
-                isDragging = false;
-            } else if (drawing) {
-                drawing = false;
-                const pos = getMousePos(e);
-                const width = pos.x - startX;
-                const height = pos.y - startY;
-                if (Math.abs(width) < 5 || Math.abs(height) < 5) {
-                    redraw();
-                    return;
+            if (editorState !== 'DRAWING') return;
+            editorState = 'IDLE';
+            const pos = getMousePos(e);
+            const width = pos.x - startX;
+            const height = pos.y - startY;
+
+            if (autoGridCheckbox.checked) {
+                if (gridState === 'DRAW_CROP') {
+                    if (Math.abs(width) < 5 || Math.abs(height) < 5) { redraw(); return; }
+                    cropBox = {
+                        x: width > 0 ? startX : pos.x,
+                        y: height > 0 ? startY : pos.y,
+                        w: Math.abs(width),
+                        h: Math.abs(height)
+                    };
+                    gridState = 'DRAW_X_STEP';
+                } else if (gridState === 'DRAW_X_STEP') {
+                    xStep = Math.abs(width);
+                    if (xStep < 1) { redraw(); return; }
+                    gridState = 'DRAW_Y_STEP';
+                } else if (gridState === 'DRAW_Y_STEP') {
+                    yStep = Math.abs(height);
+                    if (yStep < 1) { redraw(); return; }
+                    gridState = 'GRID_COMPLETE';
                 }
-                const drawnRect = {
+            } else {
+                if (Math.abs(width) < 5 || Math.abs(height) < 5) { redraw(); return; }
+                tempRects.push({
                     x: width > 0 ? startX : pos.x,
                     y: height > 0 ? startY : pos.y,
                     w: Math.abs(width),
                     h: Math.abs(height)
-                };
-                if (autoGridCheckbox.checked) {
-                    gridTemplate = drawnRect;
-                } else {
-                    tempRects.push(drawnRect);
-                }
-                redraw();
+                });
             }
+            updateInstructions();
+            redraw();
         });
 
-        const handleKeyDown = (e) => {
-            const step = e.shiftKey ? 10 : 1;
-            switch (e.key) {
-                case 'ArrowUp': moveSelection(0, -step); e.preventDefault(); break;
-                case 'ArrowDown': moveSelection(0, step); e.preventDefault(); break;
-                case 'ArrowLeft': moveSelection(-step, 0); e.preventDefault(); break;
-                case 'ArrowRight': moveSelection(step, 0); e.preventDefault(); break;
-                case 'Escape': closeEditor(); break;
-            }
-        };
-        document.addEventListener('keydown', handleKeyDown);
-        clearButton.addEventListener('click', clearSelection);
-
         const closeEditor = () => {
-            // Confirmação: Transforma a seleção temporária em recortes finais
             finalRects.length = 0;
-            if (gridTemplate) {
-                const { w, h } = gridTemplate;
-                
-                // --- INÍCIO DA NOVA LÓGICA ---
-                // Calcula o "ponto de origem" teórico da grade, que pode ser negativo
-                const originX = (gridTemplate.x % w) + gridOffset.x;
-                const originY = (gridTemplate.y % h) + gridOffset.y;
-
-                // Ajusta o ponto de partida para a primeira posição VÁLIDA (dentro da imagem)
-                let firstValidX = originX;
-                while (firstValidX < 0) {
-                    firstValidX += w;
-                }
-
-                let firstValidY = originY;
-                while (firstValidY < 0) {
-                    firstValidY += h;
-                }
-
-                // Gera a grade somente a partir dos pontos de partida válidos
-                for (let y = firstValidY; y < originalImage.height; y += h) {
-                    for (let x = firstValidX; x < originalImage.width; x += w) {
-                        // Como o ponto de partida já é válido, não precisamos mais do filtro.
-                        // Apenas garantimos que o recorte não seja maior que a imagem.
-                        const rectW = Math.min(w, originalImage.width - x);
-                        const rectH = Math.min(h, originalImage.height - y);
-                        
+            if (autoGridCheckbox.checked && gridState === 'GRID_COMPLETE') {
+                for (let y = cropBox.y; y < originalImage.height; y += yStep) {
+                    for (let x = cropBox.x; x < originalImage.width; x += xStep) {
+                        const rectW = Math.min(cropBox.w, originalImage.width - x);
+                        const rectH = Math.min(cropBox.h, originalImage.height - y);
                         if (rectW > 0 && rectH > 0) {
-                           finalRects.push({ x, y, w: rectW, h: rectH, shape: 'rect' });
+                            finalRects.push({ x, y, w: rectW, h: rectH, shape: 'rect' });
                         }
                     }
                 }
-                // --- FIM DA NOVA LÓGICA ---
-
             } else {
-                // Para recortes manuais, também garantimos que eles estejam dentro dos limites
-                tempRects.forEach(r => {
-                    if (r.x < originalImage.width && r.y < originalImage.height && r.x + r.w > 0 && r.y + r.h > 0) {
-                        finalRects.push({ ...r, shape: 'rect' });
-                    }
-                });
+                finalRects.push(...tempRects.map(r => ({ ...r, shape: 'rect' })));
             }
-
             document.body.removeChild(overlay);
             document.body.style.overflow = 'auto';
             document.removeEventListener('keydown', handleKeyDown);
             updateMainUI();
         };
+
+        const handleKeyDown = (e) => { if (e.key === 'Escape') closeEditor(); };
+        document.addEventListener('keydown', handleKeyDown);
+        clearButton.addEventListener('click', reset);
         okButton.addEventListener('click', closeEditor);
         
-        redraw();
+        reset();
     }
 
     function updateMainUI() {
