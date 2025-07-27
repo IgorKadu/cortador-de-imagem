@@ -97,16 +97,28 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.drawImage(originalImage, 0, 0);
             
             if (gridParams) {
+                // --- INÍCIO DA CORREÇÃO ---
+                // Salva o estado do canvas (sem a máscara)
+                ctx.save();
+                // Cria a máscara de recorte com o tamanho exato da imagem
+                ctx.beginPath();
+                ctx.rect(0, 0, originalImage.width, originalImage.height);
+                ctx.clip();
+                // --- FIM DA CORREÇÃO ---
+
+                // Agora, desenha a grade. Qualquer parte que vaze será visualmente cortada pela máscara.
                 ctx.strokeStyle = '#198754'; // Verde
                 ctx.lineWidth = 2;
                 for (let y = gridParams.y; y < originalImage.height; y += gridParams.yStep) {
                     for (let x = gridParams.x; x < originalImage.width; x += gridParams.xStep) {
-                        if (x + gridParams.w > 0 && y + gridParams.h > 0 && x < originalImage.width && y < originalImage.height) {
-                            ctx.strokeRect(x, y, gridParams.w, gridParams.h);
-                        }
+                        ctx.strokeRect(x, y, gridParams.w, gridParams.h);
                     }
                 }
-                // Desenha as alças
+                
+                // Restaura o canvas, removendo a máscara para desenhar as alças
+                ctx.restore();
+
+                // Desenha as alças DEPOIS de remover a máscara, para que sempre fiquem visíveis
                 const handleSize = spacingHandles.x.size;
                 spacingHandles.x.x = gridParams.x + gridParams.xStep - (handleSize / 2);
                 spacingHandles.x.y = gridParams.y + (gridParams.h / 2) - (handleSize / 2);
