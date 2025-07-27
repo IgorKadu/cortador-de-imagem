@@ -213,15 +213,45 @@ document.addEventListener('DOMContentLoaded', () => {
             finalRects.length = 0;
             if (gridTemplate) {
                 const { w, h } = gridTemplate;
-                const startX = (gridTemplate.x % w) + gridOffset.x;
-                const startY = (gridTemplate.y % h) + gridOffset.y;
-                for (let y = startY - h; y < originalImage.height; y += h) {
-                    for (let x = startX - w; x < originalImage.width; x += w) {
-                        finalRects.push({ x, y, w, h, shape: 'rect' });
+                
+                // --- INÍCIO DA NOVA LÓGICA ---
+                // Calcula o "ponto de origem" teórico da grade, que pode ser negativo
+                const originX = (gridTemplate.x % w) + gridOffset.x;
+                const originY = (gridTemplate.y % h) + gridOffset.y;
+
+                // Ajusta o ponto de partida para a primeira posição VÁLIDA (dentro da imagem)
+                let firstValidX = originX;
+                while (firstValidX < 0) {
+                    firstValidX += w;
+                }
+
+                let firstValidY = originY;
+                while (firstValidY < 0) {
+                    firstValidY += h;
+                }
+
+                // Gera a grade somente a partir dos pontos de partida válidos
+                for (let y = firstValidY; y < originalImage.height; y += h) {
+                    for (let x = firstValidX; x < originalImage.width; x += w) {
+                        // Como o ponto de partida já é válido, não precisamos mais do filtro.
+                        // Apenas garantimos que o recorte não seja maior que a imagem.
+                        const rectW = Math.min(w, originalImage.width - x);
+                        const rectH = Math.min(h, originalImage.height - y);
+                        
+                        if (rectW > 0 && rectH > 0) {
+                           finalRects.push({ x, y, w: rectW, h: rectH, shape: 'rect' });
+                        }
                     }
                 }
+                // --- FIM DA NOVA LÓGICA ---
+
             } else {
-                finalRects.push(...tempRects.map(r => ({ ...r, shape: 'rect' })));
+                // Para recortes manuais, também garantimos que eles estejam dentro dos limites
+                tempRects.forEach(r => {
+                    if (r.x < originalImage.width && r.y < originalImage.height && r.x + r.w > 0 && r.y + r.h > 0) {
+                        finalRects.push({ ...r, shape: 'rect' });
+                    }
+                });
             }
 
             document.body.removeChild(overlay);
