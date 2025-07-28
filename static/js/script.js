@@ -261,7 +261,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
 
                 if (autoGridCheckbox.checked) {
-                    gridParams = { ...rect, xStep: rect.w + 10, yStep: rect.h + 10 };
+                    gridParams = { ...rect, xStep: rect.w, yStep: rect.h };
                 } else {
                     tempRects.push(rect);
                 }
