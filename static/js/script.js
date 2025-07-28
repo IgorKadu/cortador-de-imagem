@@ -101,6 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.lineWidth = 2;
 
                 // --- INÍCIO DA LÓGICA DE DESENHO CORRIGIDA ---
+
                 // Itera sobre a grade teórica
                 for (let y = gridParams.y; y < originalImage.height; y += gridParams.yStep) {
                     for (let x = gridParams.x; x < originalImage.width; x += gridParams.xStep) {
@@ -112,17 +113,28 @@ document.addEventListener('DOMContentLoaded', () => {
                         const endY = Math.min(y + gridParams.h, originalImage.height);
 
                         // Calcula a largura e altura que são realmente visíveis.
-                        const drawW = endX - drawX;
-                        const drawH = endY - drawY;
+                        let effectiveDrawW = endX - drawX;
+                        let effectiveDrawH = endY - drawY;
 
                         // Só desenha o retângulo se ele tiver uma área visível dentro da imagem.
-                        // Isso impede matematicamente que a grade "vaze" para fora.
-                        if (drawW > 0 && drawH > 0) {
-                            ctx.strokeRect(drawX, drawY, drawW, drawH);
+                        if (effectiveDrawW > 0 && effectiveDrawH > 0) {
+                            const lineWidth = ctx.lineWidth;
+
+                            // Ajusta o desenho para garantir que a linha (stroke) esteja completamente dentro dos limites.
+                            const visualX = drawX + lineWidth / 2;
+                            const visualY = drawY + lineWidth / 2;
+                            const visualW = effectiveDrawW - lineWidth;
+                            const visualH = effectiveDrawH - lineWidth;
+
+                            // Desenha o retângulo apenas se as dimensões ajustadas ainda forem positivas
+                            if (visualW > 0 && visualH > 0) {
+                                ctx.strokeRect(visualX, visualY, visualW, visualH);
+                            }
                         }
                     }
                 }
                 // --- FIM DA LÓGICA DE DESENHO CORRIGIDA ---
+
 
                 // Desenha as alças de ajuste
                 const handleSize = spacingHandles.x.size;
