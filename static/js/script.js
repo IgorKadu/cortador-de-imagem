@@ -193,11 +193,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (editorState === 'DRAGGING_HANDLE') {
                 if (spacingHandles.x.isDragging) {
                     const newStep = pos.x - gridParams.x + (spacingHandles.x.size / 2);
-                    gridParams.xStep = Math.max(gridParams.w + 1, newStep);
+                    gridParams.xStep = Math.max(gridParams.w, newStep);
                 }
                 if (spacingHandles.y.isDragging) {
                     const newStep = pos.y - gridParams.y + (spacingHandles.y.size / 2);
-                    gridParams.yStep = Math.max(gridParams.h + 1, newStep);
+                    gridParams.yStep = Math.max(gridParams.h, newStep);
                 }
                 redraw();
             } else if (editorState === 'ADJUSTING_GRID') {
@@ -253,17 +253,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 // A LÓGICA DE OURO: Robusta e Precisa
                 for (let y = gridParams.y; y < originalImage.height; y += gridParams.yStep) {
                     for (let x = gridParams.x; x < originalImage.width; x += gridParams.xStep) {
-                        // Condição de Intersecção: O retângulo da grade cruza com a área da imagem?
-                        const gridRectOverlapsImage = 
-                            x < originalImage.width &&
-                            x + gridParams.w > 0 &&
-                            y < originalImage.height &&
-                            y + gridParams.h > 0;
+                        // Calcula a intersecção exata entre o retângulo da grade e os limites da imagem.
+                        const cropX = Math.max(x, 0);
+                        const cropY = Math.max(y, 0);
+                        const cropEndX = Math.min(x + gridParams.w, originalImage.width);
+                        const cropEndY = Math.min(y + gridParams.h, originalImage.height);
 
-                        if (gridRectOverlapsImage) {
-                            // Adiciona o retângulo com suas dimensões completas.
-                            // O backend fará o recorte final das bordas.
-                            finalRects.push({ x: x, y: y, w: gridParams.w, h: gridParams.h, shape: 'rect' });
+                        const cropW = cropEndX - cropX;
+                        const cropH = cropEndY - cropY;
+
+                        // Adiciona o retângulo apenas se ele tiver uma área visível dentro da imagem.
+                        if (cropW > 0 && cropH > 0) {
+                            finalRects.push({ x: cropX, y: cropY, w: cropW, h: cropH, shape: 'rect' });
                         }
                     }
                 }
