@@ -103,30 +103,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 // --- INÍCIO DA LÓGICA DE DESENHO CORRIGIDA ---
 
                 // Itera sobre a grade teórica
-                for (let y = gridParams.y; y < originalImage.height; y += gridParams.yStep) {
-                    for (let x = gridParams.x; x < originalImage.width; x += gridParams.xStep) {
+                // Ajuste das condições de parada dos loops para garantir que a grade não se replique além dos limites da imagem.
+                // A iteração deve parar ANTES que a célula se estenda para fora.
+                for (let y = gridParams.y; y + gridParams.h <= originalImage.height; y += gridParams.yStep) {
+                    for (let x = gridParams.x; x + gridParams.w <= originalImage.width; x += gridParams.xStep) {
                         
-                        // Calcula a intersecção exata entre o retângulo da grade e os limites da imagem.
+                        // As lógicas de `Math.max` e `Math.min` abaixo, embora úteis para o recorte final e para o desenho de partes
+                        // de células na borda, não impedirão a iteração de células "iniciando" fora se a condição do 'for' não for rigorosa.
+                        // Contudo, as manteremos para compatibilidade e robustez caso a grade inicial não seja perfeita.
+                        
                         const drawX = Math.max(x, 0);
                         const drawY = Math.max(y, 0);
                         const endX = Math.min(x + gridParams.w, originalImage.width);
                         const endY = Math.min(y + gridParams.h, originalImage.height);
 
-                        // Calcula a largura e altura que são realmente visíveis.
                         let effectiveDrawW = endX - drawX;
                         let effectiveDrawH = endY - drawY;
 
-                        // Só desenha o retângulo se ele tiver uma área visível dentro da imagem.
                         if (effectiveDrawW > 0 && effectiveDrawH > 0) {
                             const lineWidth = ctx.lineWidth;
 
-                            // Ajusta o desenho para garantir que a linha (stroke) esteja completamente dentro dos limites.
                             const visualX = drawX + lineWidth / 2;
                             const visualY = drawY + lineWidth / 2;
                             const visualW = effectiveDrawW - lineWidth;
                             const visualH = effectiveDrawH - lineWidth;
 
-                            // Desenha o retângulo apenas se as dimensões ajustadas ainda forem positivas
                             if (visualW > 0 && visualH > 0) {
                                 ctx.strokeRect(visualX, visualY, visualW, visualH);
                             }
