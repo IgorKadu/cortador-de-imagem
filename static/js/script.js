@@ -227,11 +227,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 const height = pos.y - startY;
                 if (Math.abs(width) < 5 || Math.abs(height) < 5) { reset(); return; }
                 
+                // Normalize coordenadas e dimensões para o retângulo desenhado
+                let drawnX = width > 0 ? startX : pos.x;
+                let drawnY = height > 0 ? startY : pos.y;
+                let drawnW = Math.abs(width);
+                let drawnH = Math.abs(height);
+
+                // Clampar o retângulo aos limites da imagem original
+                const finalX = Math.max(0, Math.min(drawnX, originalImage.width));
+                const finalY = Math.max(0, Math.min(drawnY, originalImage.height));
+
+                const finalW = Math.min(drawnW, originalImage.width - finalX);
+                const finalH = Math.min(drawnH, originalImage.height - finalY);
+
                 const rect = {
-                    x: width > 0 ? startX : pos.x,
-                    y: height > 0 ? startY : pos.y,
-                    w: Math.abs(width),
-                    h: Math.abs(height)
+                    x: finalX,
+                    y: finalY,
+                    w: finalW,
+                    h: finalH
                 };
 
                 if (autoGridCheckbox.checked) {
